@@ -1,3 +1,4 @@
+import { BandsIndicator } from "@/app/bands-indicator";
 import {
   AreaData,
   CandlestickData,
@@ -48,15 +49,18 @@ const ChartComponent = (props: {
       width: chartContainerRef.current!.clientWidth,
       height: 300,
     });
+    const bandIndicator = new BandsIndicator({});
+
+    const candlestickSeries = chart.addCandlestickSeries({
+      upColor: "#26a69a",
+      downColor: "#ef5350",
+      borderVisible: false,
+      wickUpColor: "#26a69a",
+      wickDownColor: "#ef5350",
+    });
     if (props.candle) {
-      const candlestickSeries = chart.addCandlestickSeries({
-        upColor: "#26a69a",
-        downColor: "#ef5350",
-        borderVisible: false,
-        wickUpColor: "#26a69a",
-        wickDownColor: "#ef5350",
-      });
       candlestickSeries.setData(data);
+      // candlestickSeries.attachPrimitive(bandIndicator);
     } else {
       const newSeries = chart.addAreaSeries({
         lineColor,
@@ -64,11 +68,11 @@ const ChartComponent = (props: {
         bottomColor: areaBottomColor,
       });
       newSeries.setData(data);
+      newSeries.attachPrimitive(bandIndicator);
     }
     chart.timeScale().fitContent();
-
     new ResizeObserver((entries) => {
-      console.log("entries", entries);
+      // console.log("entries", entries);
       if (
         entries.length === 0 ||
         entries[0].target !== chartContainerRef.current!
@@ -76,7 +80,7 @@ const ChartComponent = (props: {
         return;
       }
       const newRect = entries[0].contentRect;
-      console.log(newRect);
+      // console.log(newRect);
       chart.applyOptions({ height: newRect.height, width: newRect.width });
     }).observe(chartContainerRef.current!);
 
