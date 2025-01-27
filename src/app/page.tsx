@@ -36,7 +36,10 @@ import { CandlestickData, Time, UTCTimestamp } from "lightweight-charts";
 import { Lock, Settings, Unlock } from "lucide-react";
 import React from "react";
 import { DateRange } from "react-day-picker";
-
+enum AlpacaAPIError {
+  Forbidden,
+  NotFound,
+}
 const fetchStockData = async (
   symbols: string,
   timeframe: string,
@@ -44,7 +47,7 @@ const fetchStockData = async (
   end: string,
   next_page_token: string | null,
   API_KEY_ID: string,
-  API_SECRET_KEY: string,
+  API_SECRET_KEY: string
 ) => {
   return fetch(
     `https://data.alpaca.markets/v2/stocks/bars?symbols=${symbols}&timeframe=${timeframe}&start=${start}&end=${end}&limit=1000&adjustment=raw&feed=sip${
@@ -60,7 +63,16 @@ const fetchStockData = async (
       },
     }
   )
-    .then((res) => res.text())
+    .then((res) => {
+      console.log("res", res);
+      if (res.status === 403) {
+        throw AlpacaAPIError.Forbidden;
+      }
+      if (res.status === 404) {
+        throw AlpacaAPIError.NotFound;
+      }
+      return res.text();
+    })
     .then((value) => JSON.parse(value))
     .catch((error) => {
       console.error(error);
@@ -79,53 +91,104 @@ export default function Home() {
     from: new Date(2022, 0, 20),
     to: addDays(new Date(2022, 0, 20), 20),
   });
+  const [keyHidden, setKeyHidden] = React.useState(false);
+  const [secretHidden, setSecretHidden] = React.useState(false);
+  const [error, setError] = React.useState<AlpacaAPIError>();
+  React.useEffect(() => {
+    const previousKey = localStorage.getItem("APCA-API-KEY-ID");
+    const previousSecret = localStorage.getItem("APCA-API-SECRET-KEY");
+    if (previousKey) {
+      setAlpacaKey(previousKey);
+    }
+    if (previousSecret) {
+      setAlpacaSecret(previousSecret);
+    }
+  }, []);
   React.useEffect(() => {
     const timeout = setTimeout(() => {
-      (async () => {
-        setCandleStickData([]);
-        if (date && date.from && date.to) {
-          const aggregatedCandleStickData = [];
-          const start = encodeURIComponent(date.from.toISOString());
-          const end = encodeURIComponent(date.to.toISOString());
-          const initialData = await fetchStockData(symbol, "1Min", start, end, null, alpacaKey, alpacaSecret);
-          const initial = initialData.bars[symbol].map(({ o, h, l, c, t }) => {
-            const date = new Date(t);
-            const time = (date.getTime() / 1000) as UTCTimestamp;
-            return {
-              open: o,
-              high: h,
-              low: l,
-              close: c,
-              time,
-            };
-          });
-          aggregatedCandleStickData.push(...initial);
-          let npt = initialData.next_page_token;
-          while (npt) {
-            const data = await fetchStockData(symbol, "1Min", start, end, npt, alpacaKey, alpacaSecret);
-            npt = data.next_page_token;
-            const next_page = data.bars[symbol].map(({ o, h, l, c, t }) => {
-              const date = new Date(t);
-              const time = (date.getTime() / 1000) as UTCTimestamp;
-              return {
-                open: o,
-                high: h,
-                low: l,
-                close: c,
-                time,
-              };
-            });
-            aggregatedCandleStickData.push(...next_page);
+      if (alpacaKey && alpacaSecret) {
+        localStorage.setItem("APCA-API-KEY-ID", alpacaKey);
+        localStorage.setItem("APCA-API-SECRET-KEY", alpacaSecret);
+        (async () => {
+          setError(undefined);
+          try {
+            setCandleStickData([]);
+            if (date && date.from && date.to) {
+              const aggregatedCandleStickData = [];
+              const start = encodeURIComponent(date.from.toISOString());
+              const end = encodeURIComponent(date.to.toISOString());
+              const initialData = await fetchStockData(
+                symbol,
+                "1Min",
+                start,
+                end,
+                null,
+                alpacaKey,
+                alpacaSecret
+              );
+              const initial = initialData.bars[symbol].map(
+                ({ o, h, l, c, t }) => {
+                  const date = new Date(t);
+                  const time = (date.getTime() / 1000) as UTCTimestamp;
+                  return {
+                    open: o,
+                    high: h,
+                    low: l,
+                    close: c,
+                    time,
+                  };
+                }
+              );
+              aggregatedCandleStickData.push(...initial);
+              let npt = initialData.next_page_token;
+              while (npt) {
+                const data = await fetchStockData(
+                  symbol,
+                  "1Min",
+                  start,
+                  end,
+                  npt,
+                  alpacaKey,
+                  alpacaSecret
+                );
+                npt = data.next_page_token;
+                const next_page = data.bars[symbol].map(({ o, h, l, c, t }) => {
+                  const date = new Date(t);
+                  const time = (date.getTime() / 1000) as UTCTimestamp;
+                  return {
+                    open: o,
+                    high: h,
+                    low: l,
+                    close: c,
+                    time,
+                  };
+                });
+                aggregatedCandleStickData.push(...next_page);
+              }
+              setCandleStickData(aggregatedCandleStickData);
+            }
+          } catch (e: unknown) {
+            if (e === AlpacaAPIError.Forbidden) {
+              setError(AlpacaAPIError.Forbidden);
+            } else if (e === AlpacaAPIError.NotFound) {
+              setError(AlpacaAPIError.NotFound);
+            } else {
+              console.error("An unexpected error occurred:", e);
+            }
           }
-          setCandleStickData(aggregatedCandleStickData);
-        }
-      })();
+        })();
+      }
     }, 1000);
     return () => {
       clearTimeout(timeout);
     };
   }, [symbol, date, alpacaKey, alpacaSecret]);
 
+  const handleChangeKey = (event: React.ChangeEvent<HTMLInputElement>): void =>
+    setAlpacaKey(event.target.value);
+  const handleChangeSecret = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ): void => setAlpacaSecret(event.target.value);
   return (
     <div className="flex items-center justify-center h-screen">
       <Tabs defaultValue="candlestick">
@@ -153,20 +216,40 @@ export default function Home() {
                     <p className="font-bold">Alpaca Key and Secret</p>
                     <InputWithLock
                       value={alpacaKey}
-                      onChange={(event) => setAlpacaKey(event.target.value)}
+                      onChange={handleChangeKey}
                       placeholder="APCA-API-KEY-ID"
+                      hidden={keyHidden}
+                      setHidden={setKeyHidden}
                     />
                     <InputWithLock
                       value={alpacaSecret}
-                      onChange={(event) => setAlpacaSecret(event.target.value)}
+                      onChange={handleChangeSecret}
                       placeholder="APCA-API-SECRET-KEY"
+                      hidden={secretHidden}
+                      setHidden={setSecretHidden}
                     />
                   </div>
                 </PopoverContent>
               </Popover>
             </CardHeader>
             <CardContent>
-              <ChartComponent data={candleStickData} candle />
+              <div>
+                {error === AlpacaAPIError.Forbidden && (
+                  <span className="z-50 mt-24 ml-10 absolute flex flex-row gap-1">
+                    <p>Press the settings cog</p>
+                    <span className="flex flex-row items-center">
+                      (<Settings size={16} />)
+                    </span>
+                    <p>and add a valid alpaca key and secret</p>
+                  </span>
+                )}
+                {error === AlpacaAPIError.NotFound && (
+                  <span className="z-50 mt-24 ml-10 absolute flex flex-row gap-1">
+                    <p>Unable to retrieve data from Alpaca API</p>
+                  </span>
+                )}
+                <ChartComponent data={candleStickData} candle />
+              </div>
             </CardContent>
             <CardFooter>
               <ToggleGroup type="single" defaultValue="day">
@@ -203,8 +286,12 @@ const InputWithLock = ({
   placeholder,
   value,
   onChange,
-}: React.ComponentProps<"input">) => {
-  const [hidden, setHidden] = React.useState(false);
+  hidden,
+  setHidden,
+}: React.ComponentProps<"input"> & {
+  hidden: boolean;
+  setHidden: React.Dispatch<React.SetStateAction<boolean>>;
+}) => {
   return (
     <Input
       placeholder={placeholder}
