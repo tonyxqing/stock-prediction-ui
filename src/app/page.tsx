@@ -11,6 +11,7 @@ import {
 import ChartComponent from "@/components/ui/ChartComponent";
 import { DatePickerWithRange } from "@/components/ui/date-range";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Popover,
   PopoverContent,
@@ -110,7 +111,7 @@ export default function Home() {
   const [secretHidden, setSecretHidden] = React.useState(false);
   const [error, setError] = React.useState<AlpacaAPIError>();
   function updateLegend(param: MouseEventParams<Time>): void {
-setOHLC(param.seriesData.values().next().value as BarData<Time>);
+    setOHLC(param.seriesData.values().next().value as BarData<Time>);
   }
   React.useEffect(() => {
     const previousKey = localStorage.getItem("APCA-API-KEY-ID");
@@ -124,28 +125,53 @@ setOHLC(param.seriesData.values().next().value as BarData<Time>);
   }, []);
   React.useEffect(() => {
     const timeout = setTimeout(() => {
-      if (alpacaKey && alpacaSecret) {
-        setLoading(true);
-        localStorage.setItem("APCA-API-KEY-ID", alpacaKey);
-        localStorage.setItem("APCA-API-SECRET-KEY", alpacaSecret);
-        (async () => {
-          setError(undefined);
-          try {
-            setCandleStickData([]);
-            if (date && date.from && date.to) {
-              const aggregatedCandleStickData = [];
-              const start = encodeURIComponent(date.from.toISOString());
-              const end = encodeURIComponent(date.to.toISOString());
-              const initialData = await fetchStockData(
+      localStorage.setItem("APCA-API-KEY-ID", alpacaKey);
+      localStorage.setItem("APCA-API-SECRET-KEY", alpacaSecret);
+      setLoading(true);
+      (async () => {
+        setError(undefined);
+        try {
+          setCandleStickData([]);
+          if (date && date.from && date.to) {
+            const aggregatedCandleStickData = [];
+            const start = encodeURIComponent(date.from.toISOString());
+            const end = encodeURIComponent(date.to.toISOString());
+            const initialData = await fetchStockData(
+              symbol,
+              timeframe,
+              start,
+              end,
+              null,
+              alpacaKey,
+              alpacaSecret
+            );
+            const initial = initialData.bars[symbol].map(
+              ({ o, h, l, c, t }: AlpacaHistoricalBarDTO) => {
+                const date = new Date(t);
+                const time = (date.getTime() / 1000) as UTCTimestamp;
+                return {
+                  open: o,
+                  high: h,
+                  low: l,
+                  close: c,
+                  time,
+                };
+              }
+            );
+            aggregatedCandleStickData.push(...initial);
+            let npt = initialData.next_page_token;
+            while (npt) {
+              const data = await fetchStockData(
                 symbol,
                 timeframe,
                 start,
                 end,
-                null,
+                npt,
                 alpacaKey,
                 alpacaSecret
               );
-              const initial = initialData.bars[symbol].map(
+              npt = data.next_page_token;
+              const next_page = data.bars[symbol].map(
                 ({ o, h, l, c, t }: AlpacaHistoricalBarDTO) => {
                   const date = new Date(t);
                   const time = (date.getTime() / 1000) as UTCTimestamp;
@@ -158,49 +184,22 @@ setOHLC(param.seriesData.values().next().value as BarData<Time>);
                   };
                 }
               );
-              aggregatedCandleStickData.push(...initial);
-              let npt = initialData.next_page_token;
-              while (npt) {
-                const data = await fetchStockData(
-                  symbol,
-                  timeframe,
-                  start,
-                  end,
-                  npt,
-                  alpacaKey,
-                  alpacaSecret
-                );
-                npt = data.next_page_token;
-                const next_page = data.bars[symbol].map(
-                  ({ o, h, l, c, t }: AlpacaHistoricalBarDTO) => {
-                    const date = new Date(t);
-                    const time = (date.getTime() / 1000) as UTCTimestamp;
-                    return {
-                      open: o,
-                      high: h,
-                      low: l,
-                      close: c,
-                      time,
-                    };
-                  }
-                );
-                aggregatedCandleStickData.push(...next_page);
-              }
-              setLoading(false);
-              setCandleStickData(aggregatedCandleStickData);
-            }
-          } catch (e: unknown) {
-            if (e === AlpacaAPIError.Forbidden) {
-              setError(AlpacaAPIError.Forbidden);
-            } else if (e === AlpacaAPIError.NotFound) {
-              setError(AlpacaAPIError.NotFound);
-            } else {
-              console.error("An unexpected error occurred:", e);
+              aggregatedCandleStickData.push(...next_page);
             }
             setLoading(false);
+            setCandleStickData(aggregatedCandleStickData);
           }
-        })();
-      }
+        } catch (e: unknown) {
+          if (e === AlpacaAPIError.Forbidden) {
+            setError(AlpacaAPIError.Forbidden);
+          } else if (e === AlpacaAPIError.NotFound) {
+            setError(AlpacaAPIError.NotFound);
+          } else {
+            console.error("An unexpected error occurred:", e);
+          }
+          setLoading(false);
+        }
+      })();
     }, 1000);
     return () => {
       clearTimeout(timeout);
@@ -257,7 +256,9 @@ setOHLC(param.seriesData.values().next().value as BarData<Time>);
             </CardHeader>
             <CardContent>
               <div>
-                {error === AlpacaAPIError.Forbidden && (
+                {(error === AlpacaAPIError.Forbidden ||
+                  !alpacaKey ||
+                  !alpacaSecret) && (
                   <span className="z-50 mt-24 ml-10 absolute flex flex-row gap-1">
                     <p>Press the settings cog</p>
                     <span className="flex flex-row items-center">
@@ -298,7 +299,11 @@ setOHLC(param.seriesData.values().next().value as BarData<Time>);
                           <p>{ohlc.low.toFixed(2)}</p>
                         </span>
                       </span>
-                      <p>{new Date(ohlc.time.valueOf() as number * 1000).toLocaleString()}</p>
+                      <p>
+                        {new Date(
+                          (ohlc.time.valueOf() as number) * 1000
+                        ).toLocaleString()}
+                      </p>
                     </>
                   )}
                 </span>
@@ -310,29 +315,38 @@ setOHLC(param.seriesData.values().next().value as BarData<Time>);
               </div>
             </CardContent>
             <CardFooter className="gap-2">
-              <Select value={timeframe} onValueChange={setTimeframe}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Time Frame" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1Min">Minute</SelectItem>
-                  <SelectItem value="1Hour">Hour</SelectItem>
-                  <SelectItem value="1Day">Day</SelectItem>
-                  <SelectItem value="1Month">Month</SelectItem>
-                  <SelectItem value="1Year">Year</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={symbol} onValueChange={setSymbol}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Ticker Symbol" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="AAPL">AAPL</SelectItem>
-                  <SelectItem value="TSLA">TSLA</SelectItem>
-                  <SelectItem value="MSFT">MSFT</SelectItem>
-                </SelectContent>
-              </Select>
-              <DatePickerWithRange state={[date, setDate]} />
+              <span>
+                <Label className="font-bold">Timeframe</Label>
+                <Select value={timeframe} onValueChange={setTimeframe}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Time Frame" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1Min">Minute</SelectItem>
+                    <SelectItem value="1Hour">Hour</SelectItem>
+                    <SelectItem value="1Day">Day</SelectItem>
+                    <SelectItem value="1Month">Month</SelectItem>
+                    <SelectItem value="1Year">Year</SelectItem>
+                  </SelectContent>
+                </Select>
+              </span>
+              <span>
+                <Label className="font-bold">Ticker</Label>
+                <Select value={symbol} onValueChange={setSymbol}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Ticker Symbol" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AAPL">AAPL</SelectItem>
+                    <SelectItem value="TSLA">TSLA</SelectItem>
+                    <SelectItem value="MSFT">MSFT</SelectItem>
+                  </SelectContent>
+                </Select>
+              </span>
+              <span>
+                <Label className="font-bold">Date Range</Label>
+                <DatePickerWithRange state={[date, setDate]} />
+              </span>
             </CardFooter>
           </Card>
         </TabsContent>
