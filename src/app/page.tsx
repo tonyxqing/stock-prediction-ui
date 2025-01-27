@@ -259,7 +259,7 @@ export default function Home() {
                 {(error === AlpacaAPIError.Forbidden ||
                   !alpacaKey ||
                   !alpacaSecret) && (
-                  <span className="z-50 mt-24 ml-10 absolute flex flex-row gap-1">
+                  <span className="z-50 mt-32 ml-20 absolute flex flex-row gap-1 text-gray-400">
                     <p>Press the settings cog</p>
                     <span className="flex flex-row items-center">
                       (<Settings size={16} />)
@@ -268,7 +268,7 @@ export default function Home() {
                   </span>
                 )}
                 {error === AlpacaAPIError.NotFound && (
-                  <span className="z-50 mt-24 ml-10 absolute flex flex-row gap-1">
+                  <span className="z-50 mt-32 ml-20 absolute flex flex-row gap-1 text-gray-400">
                     <p>Unable to retrieve data from Alpaca API</p>
                   </span>
                 )}
