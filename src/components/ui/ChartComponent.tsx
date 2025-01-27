@@ -3,6 +3,7 @@ import {
   CandlestickData,
   ColorType,
   createChart,
+  MouseEventParams,
   Time,
   WhitespaceData,
 } from "lightweight-charts";
@@ -10,6 +11,7 @@ import React from "react";
 
 const ChartComponent = (
   props: {
+    updateLegend(param: MouseEventParams<Time>): void,
     candle?: boolean;
     data: (CandlestickData<Time> | AreaData<Time> | WhitespaceData<Time>)[];
     colors?:
@@ -81,6 +83,7 @@ const ChartComponent = (
       chart.applyOptions({ height: newRect.height, width: newRect.width });
     }).observe(chartContainerRef.current!);
 
+    chart.subscribeCrosshairMove(props.updateLegend);
     return () => {
       chart.remove();
     };

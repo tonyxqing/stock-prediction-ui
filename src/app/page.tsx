@@ -31,7 +31,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { addDays } from "date-fns";
-import { CandlestickData, Time, UTCTimestamp } from "lightweight-charts";
+import {
+  BarData,
+  CandlestickData,
+  MouseEventParams,
+  Time,
+  UTCTimestamp,
+} from "lightweight-charts";
 import { LoaderIcon, Lock, Settings, Unlock } from "lucide-react";
 import React from "react";
 import { DateRange } from "react-day-picker";
@@ -78,11 +84,19 @@ const fetchStockData = async (
       throw error;
     });
 };
+interface AlpacaHistoricalBarDTO {
+  o: number;
+  h: number;
+  l: number;
+  c: number;
+  t: string;
+}
 
 export default function Home() {
   const [candleStickData, setCandleStickData] = React.useState<
     CandlestickData<Time>[]
   >([]);
+  const [ohlc, setOHLC] = React.useState<BarData<Time>>();
   const [symbol, setSymbol] = React.useState("AAPL");
   const [timeframe, setTimeframe] = React.useState("1Min");
   const [alpacaKey, setAlpacaKey] = React.useState("");
@@ -95,6 +109,9 @@ export default function Home() {
   const [keyHidden, setKeyHidden] = React.useState(false);
   const [secretHidden, setSecretHidden] = React.useState(false);
   const [error, setError] = React.useState<AlpacaAPIError>();
+  function updateLegend(param: MouseEventParams<Time>): void {
+setOHLC(param.seriesData.values().next().value as BarData<Time>);
+  }
   React.useEffect(() => {
     const previousKey = localStorage.getItem("APCA-API-KEY-ID");
     const previousSecret = localStorage.getItem("APCA-API-SECRET-KEY");
@@ -129,7 +146,7 @@ export default function Home() {
                 alpacaSecret
               );
               const initial = initialData.bars[symbol].map(
-                ({ o, h, l, c, t }) => {
+                ({ o, h, l, c, t }: AlpacaHistoricalBarDTO) => {
                   const date = new Date(t);
                   const time = (date.getTime() / 1000) as UTCTimestamp;
                   return {
@@ -154,17 +171,19 @@ export default function Home() {
                   alpacaSecret
                 );
                 npt = data.next_page_token;
-                const next_page = data.bars[symbol].map(({ o, h, l, c, t }) => {
-                  const date = new Date(t);
-                  const time = (date.getTime() / 1000) as UTCTimestamp;
-                  return {
-                    open: o,
-                    high: h,
-                    low: l,
-                    close: c,
-                    time,
-                  };
-                });
+                const next_page = data.bars[symbol].map(
+                  ({ o, h, l, c, t }: AlpacaHistoricalBarDTO) => {
+                    const date = new Date(t);
+                    const time = (date.getTime() / 1000) as UTCTimestamp;
+                    return {
+                      open: o,
+                      high: h,
+                      low: l,
+                      close: c,
+                      time,
+                    };
+                  }
+                );
                 aggregatedCandleStickData.push(...next_page);
               }
               setLoading(false);
@@ -257,7 +276,37 @@ export default function Home() {
                     <LoaderIcon className="animate-spin" />
                   </span>
                 )}
-                <ChartComponent data={candleStickData} candle />
+                <span className="absolute z-50 gap-2 flex flex-row">
+                  <h1 className="font-bold">{symbol}</h1>
+                  {ohlc && (
+                    <>
+                      <span className="flex flex-row gap-3">
+                        <span className="flex flex-row gap-1">
+                          <p>O</p>
+                          <p>{ohlc.open.toFixed(2)}</p>
+                        </span>
+                        <span className="flex flex-row gap-1">
+                          <p>H</p>
+                          <p>{ohlc.high.toFixed(2)}</p>
+                        </span>
+                        <span className="flex flex-row gap-1">
+                          <p>C</p>
+                          <p>{ohlc.close.toFixed(2)}</p>
+                        </span>
+                        <span className="flex flex-row gap-1">
+                          <p>L</p>
+                          <p>{ohlc.low.toFixed(2)}</p>
+                        </span>
+                      </span>
+                      <p>{new Date(ohlc.time.valueOf() as number * 1000).toLocaleString()}</p>
+                    </>
+                  )}
+                </span>
+                <ChartComponent
+                  data={candleStickData}
+                  candle
+                  updateLegend={updateLegend}
+                />
               </div>
             </CardContent>
             <CardFooter className="gap-2">
