@@ -24,7 +24,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
   TooltipContent,
@@ -33,7 +32,7 @@ import {
 } from "@/components/ui/tooltip";
 import { addDays } from "date-fns";
 import { CandlestickData, Time, UTCTimestamp } from "lightweight-charts";
-import { Lock, Settings, Unlock } from "lucide-react";
+import { LoaderIcon, Lock, Settings, Unlock } from "lucide-react";
 import React from "react";
 import { DateRange } from "react-day-picker";
 enum AlpacaAPIError {
@@ -91,6 +90,7 @@ export default function Home() {
     from: new Date(2022, 0, 20),
     to: addDays(new Date(2022, 0, 20), 20),
   });
+  const [loading, setLoading] = React.useState(true);
   const [keyHidden, setKeyHidden] = React.useState(false);
   const [secretHidden, setSecretHidden] = React.useState(false);
   const [error, setError] = React.useState<AlpacaAPIError>();
@@ -107,6 +107,7 @@ export default function Home() {
   React.useEffect(() => {
     const timeout = setTimeout(() => {
       if (alpacaKey && alpacaSecret) {
+        setLoading(true);
         localStorage.setItem("APCA-API-KEY-ID", alpacaKey);
         localStorage.setItem("APCA-API-SECRET-KEY", alpacaSecret);
         (async () => {
@@ -165,6 +166,7 @@ export default function Home() {
                 });
                 aggregatedCandleStickData.push(...next_page);
               }
+              setLoading(false);
               setCandleStickData(aggregatedCandleStickData);
             }
           } catch (e: unknown) {
@@ -175,6 +177,7 @@ export default function Home() {
             } else {
               console.error("An unexpected error occurred:", e);
             }
+            setLoading(false);
           }
         })();
       }
@@ -246,6 +249,11 @@ export default function Home() {
                 {error === AlpacaAPIError.NotFound && (
                   <span className="z-50 mt-24 ml-10 absolute flex flex-row gap-1">
                     <p>Unable to retrieve data from Alpaca API</p>
+                  </span>
+                )}
+                {loading && (
+                  <span className="z-50 mt-32 ml-72 absolute flex flex-row gap-1">
+                    <LoaderIcon className="animate-spin" />
                   </span>
                 )}
                 <ChartComponent data={candleStickData} candle />
