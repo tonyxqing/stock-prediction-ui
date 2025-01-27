@@ -84,6 +84,7 @@ export default function Home() {
     CandlestickData<Time>[]
   >([]);
   const [symbol, setSymbol] = React.useState("AAPL");
+  const [timeframe, setTimeframe] = React.useState("1Min");
   const [alpacaKey, setAlpacaKey] = React.useState("");
   const [alpacaSecret, setAlpacaSecret] = React.useState("");
   const [date, setDate] = React.useState<DateRange | undefined>({
@@ -120,7 +121,7 @@ export default function Home() {
               const end = encodeURIComponent(date.to.toISOString());
               const initialData = await fetchStockData(
                 symbol,
-                "1Min",
+                timeframe,
                 start,
                 end,
                 null,
@@ -145,7 +146,7 @@ export default function Home() {
               while (npt) {
                 const data = await fetchStockData(
                   symbol,
-                  "1Min",
+                  timeframe,
                   start,
                   end,
                   npt,
@@ -185,7 +186,7 @@ export default function Home() {
     return () => {
       clearTimeout(timeout);
     };
-  }, [symbol, date, alpacaKey, alpacaSecret]);
+  }, [timeframe, symbol, date, alpacaKey, alpacaSecret]);
 
   const handleChangeKey = (event: React.ChangeEvent<HTMLInputElement>): void =>
     setAlpacaKey(event.target.value);
@@ -259,18 +260,19 @@ export default function Home() {
                 <ChartComponent data={candleStickData} candle />
               </div>
             </CardContent>
-            <CardFooter>
-              <ToggleGroup type="single" defaultValue="day">
-                <ToggleGroupItem value="day" aria-label="Toggle day">
-                  Day
-                </ToggleGroupItem>
-                <ToggleGroupItem value="week" aria-label="Toggle week">
-                  Week
-                </ToggleGroupItem>
-                <ToggleGroupItem value="month" aria-label="Toggle month">
-                  Month
-                </ToggleGroupItem>
-              </ToggleGroup>
+            <CardFooter className="gap-2">
+              <Select value={timeframe} onValueChange={setTimeframe}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Time Frame" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1Min">Minute</SelectItem>
+                  <SelectItem value="1Hour">Hour</SelectItem>
+                  <SelectItem value="1Day">Day</SelectItem>
+                  <SelectItem value="1Month">Month</SelectItem>
+                  <SelectItem value="1Year">Year</SelectItem>
+                </SelectContent>
+              </Select>
               <Select value={symbol} onValueChange={setSymbol}>
                 <SelectTrigger className="w-[180px]">
                   <SelectValue placeholder="Ticker Symbol" />
