@@ -94,6 +94,7 @@ const ChartComponent = (props: {
     textColor,
     areaTopColor,
     areaBottomColor,
+    props.candle,
   ]);
 
   return <div className="flex overflow-hidden" ref={chartContainerRef} />;
